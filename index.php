@@ -25,7 +25,8 @@
 // 2011-12-28 - Added notation[], ai move inspect; "fixed" random number generator for ai_move
 // 2011-12-29 - Added history traversal
 // 2011-12-30 - Bugfixes, one cell in adjacent pointed to 64 = bad, apply_gravity worked on row 8 = bad
-
+// 2012-01-05 - Tried to make the AI not cheat, but it didn't want to give up that power :)
+// 2012-01-06 - Made the AI not cheat, took less time to do so than before :)
 
 // todo make ai not cheat!
 // todo tiebreak on equal moves, by counting sets of 2 instead of sets of 3
@@ -44,6 +45,7 @@ var moves_made = 0;
 var fake_rand = 0;
 var history = [];
 var history_position = 0;
+var ai_partial_computation = 0;
 
 var interactive = 1;
 var timing = 100;
@@ -83,7 +85,7 @@ precompute();
 function random_jewel(really_random)
 	{
 	if (really_random) // for new_game()
-		return Math.floor(Math.random() * basic_jewels)
+		return Math.floor(Math.random() * basic_jewels);
 	else
 		{ // for ai :)
 		fake_rand = (fake_rand + 1) % basic_jewels;
@@ -253,7 +255,7 @@ function splode(count_only, stability_factor)
 		for (var column = 0; column < width; ++column)
 			{
 			var k = column + row * width;
-			if (previous_jewel != -1 && previous_jewel == jewels[k])
+			if (previous_jewel != -1 && previous_jewel == jewels[k] && jewels[k] >= 0)
 				++same;
 			else
 				same = 0;
@@ -277,7 +279,7 @@ function splode(count_only, stability_factor)
 		for (var row = 0; row < height; ++row)
 			{
 			var k = row * width + column;
-			if (previous_jewel != -1 && previous_jewel == jewels[k])
+			if (previous_jewel != -1 && previous_jewel == jewels[k] && jewels[k] >= 0)
 				++same;
 			else
 				same = 0;
@@ -319,13 +321,25 @@ function apply_gravity()
 		row_delta = 0;
 		for (var row = height - 1; row >= 0; --row)
 			{
-			k = row * width + column;
+			var k = row * width + column;
 			if (jewels[k] == -1)
 				{
 				row_delta = width;
 				}
 			if (jewels[k - row_delta] == undefined)
-				jewels[k] = random_jewel();
+				{
+				if (ai_partial_computation == 1)
+					{
+					if ($('#cheat').attr('checked'))
+						jewels[k] = random_jewel();
+					else
+						jewels[k] = -2;
+					}
+				else
+					{
+					jewels[k] = random_jewel();
+					}
+				}
 			else
 				jewels[k] = jewels[k - row_delta];
 
@@ -353,7 +367,7 @@ function reduce()
 
 function gravity()
 	{
-	j = apply_gravity();
+	var j = apply_gravity();
 	if (j == 0)
 		{
 		if (splode(1) == 0)
@@ -432,8 +446,10 @@ function ai_move(inspect)
 		var the_move = moves[i].split(' to ');
 		inspected += 'move[' + (i + 1) + ']: ' + notation[the_move[0]] + ' to ' + notation[the_move[1]];
 
+		ai_partial_computation = 1; // fixme - 1 errors out
 		move(the_move[0]);
 		move(the_move[1]);
+		ai_partial_computation = 0;
 
 		var the_moves = count_moves();
 		var the_move_count = the_moves.length;
@@ -523,7 +539,8 @@ function history_traverse(direction)
 </script>
 <form>
 <input type=button value=New onclick=new_game()>
-<!-- <input type=button value=Reduce onclick=reduce()>
+<!--
+<input type=button value=Reduce onclick=reduce()>
 <input type=button value=Energy onclick=energy()> -->
 <input type=button value="AI" onclick=ai_move()>
 <input type=button value="Inspect" onclick=ai_move(1)>
@@ -532,6 +549,7 @@ function history_traverse(direction)
 <label for=gogo><input type=checkbox id=gogo> AI keeps playing</label></br>
 <label for=maxmoves><input id=maxmoves type=radio name=whattomax value=moves checked=1>Maximize moves</label>
 <label for=maxscore><input id=maxscore type=radio name=whattomax value=score>Maximize score</label>
+<label for=cheat><input type=checkbox id=cheat> AI cheats</label></br>
 <hr>
 AI: For every move X, calculate the number of moves Y in the resulting position.  The move played 
 will be the one with the largest Y (tie-break: largest score).  Some insight on trying to pick the 
